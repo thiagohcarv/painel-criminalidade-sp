@@ -1,0 +1,16 @@
+# Dados (não versionar arquivos brutos grandes)
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*.csv
+!data/processed/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# SO
+.DS_Store

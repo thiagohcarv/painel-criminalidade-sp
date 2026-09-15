@@ -1,0 +1,64 @@
+{
+  "resultados": {
+    "Arvore de Decisao": {
+      "melhores_params": {
+        "max_depth": 5,
+        "min_samples_leaf": 20
+      },
+      "cv_f1_macro": 0.7718858505941724,
+      "test_accuracy": 0.6770833333333334,
+      "test_f1_macro": 0.6463022224390623
+    },
+    "XGBoost": {
+      "melhores_params": {
+        "learning_rate": 0.05,
+        "max_depth": 5,
+        "n_estimators": 50
+      },
+      "cv_f1_macro": 0.7789176646794148,
+      "test_accuracy": 0.6901041666666666,
+      "test_f1_macro": 0.6661599701890873
+    }
+  },
+  "vencedor": "XGBoost",
+  "limiares_risco": {
+    "q1": 158.0,
+    "q2": 261.0
+  },
+  "classes": [
+    "ALTO",
+    "BAIXO",
+    "MEDIO"
+  ],
+  "matriz_confusao": [
+    [
+      144,
+      0,
+      45
+    ],
+    [
+      3,
+      41,
+      27
+    ],
+    [
+      23,
+      21,
+      80
+    ]
+  ],
+  "corte_treino_teste": 202209,
+  "baselines": {
+    "classe_majoritaria": {
+      "accuracy": 0.18489583333333334,
+      "f1_macro": 0.10402930402930403
+    },
+    "persistencia_mes_anterior": {
+      "accuracy": 0.7135416666666666,
+      "f1_macro": 0.6869973061408007
+    }
+  },
+  "features_extras_testadas": {
+    "descricao": "Testadas MEDIA_HISTORICA (media expandida) e SUBPREF_MEDIA_MOVEL_3 (sinal regional); resultado piorou levemente (F1 0.660 vs 0.666) e foram removidas por simplicidade/Occam."
+  }
+}
