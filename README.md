@@ -43,7 +43,16 @@ Construir um painel interativo (mapa + filtros por tipo de ocorrência + linha d
 
 ## Status atual
 
-🟢 Ocorrências atribuídas a distritos reais da capital. Pronto para EDA e modelagem.
+🟢 v2 publicada — modelo normalizado por população, supera o baseline de persistência.
+
+### v2 — Normalização por população (SEADE)
+
+- Dados de população por distrito (Fundação SEADE, ano-base 2020) integrados via `data/external/populacao_distrito_2020.csv`.
+- Variável-alvo do modelo passou de "volume absoluto de ocorrências" para **"taxa por 100 mil habitantes"**.
+- **Achado principal:** o ranking por volume bruto favorecia distritos centrais de alto fluxo comercial (República, Sé, Consolação); normalizado por população, **Sé, Barra Funda e Brás disparam** (baixíssima população residente) enquanto **Capão Redondo, São Mateus, Jardim Ângela saem do top 10**.
+- **Ganho no modelo:** F1-macro do XGBoost subiu de 0,666 (v1) para **0,755 (v2)**, e agora **supera o baseline de persistência** (0,726) — na v1 isso não acontecia (baseline vencia com 0,687).
+- Gráfico novo: `reports/figures/06_volume_vs_taxa_percapita.png`.
+- Mapa de risco (`mapa_risco_previsto_dez2022.html`) e `DOCUMENTACAO_FINAL.md` atualizados para refletir a v2.
 
 ### Progresso
 

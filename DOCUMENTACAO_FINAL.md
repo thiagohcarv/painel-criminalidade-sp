@@ -26,7 +26,12 @@ Dataset acadêmico (Freitas, Clarindo & Aguiar, 2023 — DSW/SBC) construído a 
 - **Repositório:** https://github.com/codigourbano/distritos-sp (fonte primária: GeoSampa, Secretaria Municipal de Desenvolvimento Urbano)
 - 96 distritos administrativos, agrupados em 32 subprefeituras.
 
-### Por que essa fonte, e não o portal oficial diretamente
+### Fonte adicional (v2): população por distrito
+- **Repositório:** Fundação SEADE, projeção de população por distrito do MSP (dadosabertos.des.sp.gov.br / repositorio.seade.gov.br)
+- Dados quinquenais (2000, 2005, ..., 2050); usamos o ano **2020** (mais próximo do período de análise 2021-2022, já que o dado exato de 2022 não está nessa série).
+- Usada para normalizar as ocorrências por 100 mil habitantes, evitando que o índice de risco reflita apenas fluxo de circulação.
+
+### Por que SPSafe, e não o portal oficial diretamente
 O portal oficial (ssp.sp.gov.br/estatistica) não oferece API nem download estruturado — funciona como ferramenta de consulta interativa, e esteve instável/inacessível durante o desenvolvimento do projeto (confirmado inclusive por artigo acadêmico independente que documentou a mesma limitação). O SPSafe resolve isso oferecendo os mesmos dados já tratados e hospedados de forma estável (Zenodo).
 
 ### Tratamento e limpeza aplicados
@@ -44,8 +49,8 @@ O portal oficial (ssp.sp.gov.br/estatistica) não oferece API nem download estru
 - **Crescimento 2021→2022:** 246.690 → 302.708 ocorrências (+22,7%), consistente com a narrativa de retomada de mobilidade pós-pandemia. Ver `reports/figures/01_evolucao_mensal.png`.
 - **Composição:** Roubo e Furto somados representam a maioria esmagadora das ocorrências: destaque para "Roubo - Outros" (103.867), "Furto - Outros" (100.419), "Furto de Veículo" (77.093) e "Roubo de Veículo" (72.288). Ver `reports/figures/02_por_categoria.png`.
 - **Padrão temporal:** ocorrências concentram-se no período **noturno** (174.381) e no meio da semana (quinta-feira é o pico). Ver `reports/figures/03_heatmap_dia_periodo.png`.
-- **Padrão espacial:** os distritos com maior volume absoluto são República, Sé e Consolação (região central, alto fluxo comercial/turístico) e Capão Redondo, São Mateus, Jardim Ângela (periferia). Ver `reports/figures/04_top_distritos.png`.
-- **Limitação reconhecida:** o ranking por volume absoluto favorece regiões de alta circulação (comércio, transporte) mesmo sem serem necessariamente as de maior risco *per capita* — normalizar por população residente (dado do IBGE/SEADE) é uma melhoria natural para uma próxima iteração.
+- **Padrão espacial (volume absoluto):** os distritos com maior volume são República, Sé e Consolação (região central, alto fluxo comercial/turístico) e Capão Redondo, São Mateus, Jardim Ângela (periferia). Ver `reports/figures/04_top_distritos.png`.
+- **Padrão espacial (normalizado por população — achado central da v2):** ao dividir pelo número de residentes de cada distrito (dados SEADE), o ranking muda drasticamente. **Sé lidera com ~47.800 ocorrências por 100 mil habitantes** — mais que o triplo do 2º colocado — seguido por Barra Funda, República, Brás e Pari: todos distritos centrais de baixíssima população residente e altíssimo fluxo de pessoas (comércio, transporte, trabalho). **Capão Redondo, São Mateus, Jardim Ângela, Sapopemba e Ipiranga — que apareciam no top 10 por volume — desaparecem completamente do top 10 por taxa.** Isso confirma empiricamente a limitação identificada na v1: ranking por volume bruto mede fluxo de circulação, não risco real por morador. Ver `reports/figures/06_volume_vs_taxa_percapita.png`.
 
 ---
 
@@ -54,11 +59,11 @@ O portal oficial (ssp.sp.gov.br/estatistica) não oferece API nem download estru
 ### Definição do problema
 **Classificação supervisionada:** prever a classe de risco (Baixo / Médio / Alto) de cada distrito em cada mês, usando **apenas informação disponível até o mês anterior** (nenhuma variável do próprio mês é usada como feature, para evitar vazamento de dados).
 
-### Variável-alvo
-Total de ocorrências por distrito/mês, discretizado em tercis. **Os limiares de corte foram calculados exclusivamente com dados de treino** e depois aplicados ao teste — evita que a distribuição do futuro vaze para a definição das classes.
+### Variável-alvo (v2 — normalizada por população)
+**Taxa de ocorrências por 100 mil habitantes** por distrito/mês (não mais o volume bruto), discretizada em tercis, usando população por distrito (Fundação SEADE, ano-base 2020). **Os limiares de corte foram calculados exclusivamente com dados de treino** e depois aplicados ao teste — evita que a distribuição do futuro vaze para a definição das classes. A normalização corrige o viés identificado na EDA, em que distritos de alto fluxo comercial (Sé, República, Barra Funda) dominavam o ranking bruto sem necessariamente serem os de maior risco por morador.
 
 ### Features utilizadas
-`MES` (sazonalidade), `LAG_1`, `LAG_2` (ocorrências dos 2 meses anteriores), `MEDIA_MOVEL_3` (média móvel de 3 meses), `TENDENCIA` (diferença entre lags), `PCT_ROUBO`/`PCT_FURTO`/`PCT_OUTROS` (perfil de composição criminal do mês anterior), `SUBPREFEITURA` (codificada).
+`MES` (sazonalidade), `LAG_1`, `LAG_2` (taxa dos 2 meses anteriores), `MEDIA_MOVEL_3` (média móvel de 3 meses da taxa), `TENDENCIA` (diferença entre lags), `PCT_ROUBO`/`PCT_FURTO`/`PCT_OUTROS` (perfil de composição criminal do mês anterior), `SUBPREFEITURA` (codificada).
 
 *Duas features adicionais foram testadas (média histórica expandida e sinal agregado da subprefeitura) e descartadas por piorarem levemente o resultado no teste — mantidas fora do modelo final por simplicidade (navalha de Occam).*
 
@@ -67,27 +72,29 @@ Total de ocorrências por distrito/mês, discretizado em tercis. **Os limiares d
 - **Cross-validation:** `TimeSeriesSplit` (4 folds) dentro do treino, respeitando a ordem cronológica — um `KFold` aleatório teria vazamento (treinaria com meses futuros para prever meses passados).
 - **Otimização de hiperparâmetros:** `GridSearchCV` sobre o TimeSeriesSplit.
 
-### O duelo: Árvore de Decisão vs. XGBoost
+### O duelo: Árvore de Decisão vs. XGBoost (v2 — variável normalizada)
 
 | Modelo | Melhores hiperparâmetros | F1-macro (CV, treino) | F1-macro (teste, holdout) |
 |---|---|---|---|
-| Árvore de Decisão | `max_depth=5, min_samples_leaf=20` | 0,772 | **0,646** |
-| XGBoost | `max_depth=5, learning_rate=0.05, n_estimators=50` | 0,779 | **0,666** |
+| Árvore de Decisão | `max_depth=3, min_samples_leaf=20` | 0,759 | **0,730** |
+| XGBoost | `max_depth=3, learning_rate=0.1, n_estimators=50` | 0,779 | **0,755** |
 
-**Vencedor: XGBoost**, com melhor generalização no holdout temporal (precisão de 0,85 para a classe ALTO risco — o caso de maior interesse prático).
+**Vencedor: XGBoost**, com precisão de 0,91 para a classe ALTO risco (recall 0,84) — o caso de maior interesse prático.
 
-### Comparação com baselines (achado crítico, reportado com transparência)
+### Comparação com baselines
 
 | Modelo | F1-macro (teste) |
 |---|---|
 | Baseline ingênuo (classe majoritária) | 0,104 |
-| Árvore de Decisão | 0,646 |
-| XGBoost | 0,666 |
-| **Baseline de persistência** (repete a classe do mês anterior) | **0,687** |
+| Árvore de Decisão | 0,730 |
+| Baseline de persistência (repete a classe do mês anterior) | 0,726 |
+| **XGBoost** | **0,755** |
 
-Testamos também um baseline de persistência simples (assumir que o risco do mês é igual ao do mês anterior). **Esse baseline superou os dois modelos treinados.** Isso não invalida o exercício — é um achado real e consistente com a literatura de criminologia: taxas de criminalidade têm forte autocorrelação temporal e espacial ("hot spots" persistem). Um modelo sofisticado só se justifica se capturar sinal *além* dessa persistência (ex: mudanças de tendência, sazonalidade fina, composição de crime) — e neste recorte de dados (2 anos, granularidade mensal), esse sinal adicional foi limitado.
+**Diferente da v1 (variável não normalizada), aqui o XGBoost supera o baseline de persistência.** Isso é consistente com a hipótese de que a taxa per capita captura sinal real de risco (menos ruidoso que o volume bruto, que mistura população residente com fluxo transitório) — o modelo tem algo genuíno para aprender além de "repetir o mês passado". Esse é o principal ganho metodológico da v2 sobre a v1: não só o ranking ficou mais correto, o modelo também ficou mais útil.
 
-Ver `reports/figures/05_comparacao_modelos_baseline.png` para a comparação visual completa.
+*Nota histórica: a v1 deste projeto (sem normalização por população) obteve F1-macro de 0,666 para o XGBoost, sem superar o baseline de persistência (0,687) — documentado para registrar a evolução do raciocínio.*
+
+Ver `reports/figures/05_comparacao_modelos_baseline.png` e `reports/figures/06_volume_vs_taxa_percapita.png`.
 
 ---
 
@@ -102,13 +109,14 @@ Arquivo: `reports/figures/mapa_risco_previsto_dez2022.html`
 ## 6. Conclusões
 
 1. **O pipeline de dados foi o maior desafio técnico, não a modelagem em si.** A maior parte do esforço do projeto foi validar e corrigir a qualidade espacial dos dados (campos nulos, bounding box vazando para cidades vizinhas, coordenadas corrompidas) — uma etapa frequentemente subestimada, mas que determina se qualquer modelo posterior é confiável.
-2. **O modelo XGBoost venceu a Árvore de Decisão**, mas **nenhum dos dois superou o baseline de persistência simples.** Isso é um resultado honesto e cientificamente relevante: criminalidade mensal por distrito é uma série altamente autocorrelacionada, e a "aposta segura" (repetir o mês anterior) é difícil de bater com apenas 2 anos de histórico mensal.
-3. **Valor prático do modelo, mesmo sem bater o baseline:** o XGBoost oferece (a) probabilidades de classe, úteis para priorização por confiança; (b) incorporação explícita de sazonalidade e composição do tipo de crime, que a persistência ignora; (c) capacidade de generalizar para situações fora do padrão simples de "repetir o mês anterior" (ex: mudanças estruturais).
-4. **Limitações reconhecidas:**
+2. **Normalizar por população mudou o resultado em dois níveis: o ranking e o modelo.** No ranking, distritos centrais de baixa população residente e alto fluxo (Sé, Barra Funda, República) saltaram para o topo, enquanto distritos periféricos populosos (Capão Redondo, São Mateus, Jardim Ângela) saíram do top 10 — o volume bruto media circulação, não risco por morador. No modelo, essa mesma correção fez o **XGBoost passar a superar o baseline de persistência** (F1-macro 0,755 vs. 0,726), algo que não acontecia com a variável não normalizada (0,666 vs. 0,687 na v1). A taxa per capita carrega sinal real que o modelo consegue aprender; o volume bruto era, em boa parte, ruído de composição populacional.
+3. **O modelo XGBoost venceu a Árvore de Decisão** em ambas as versões, com boa precisão para a classe de maior interesse prático (ALTO risco: precisão 0,91 na v2).
+4. **Valor prático do modelo:** além de superar a persistência, o XGBoost oferece probabilidades de classe (úteis para priorização por confiança) e incorpora explicitamente sazonalidade e composição do tipo de crime.
+5. **Limitações reconhecidas:**
    - Apenas 2 anos de dado mensal (24 pontos temporais por distrito) — pouco para capturar sazonalidade robusta.
-   - Ranking por volume absoluto não normalizado por população residente.
-   - Ausência de variáveis socioeconômicas (renda, densidade) que poderiam explicar variação entre distritos.
-5. **Próximos passos recomendados:** normalizar por população (IBGE/SEADE), estender a série histórica além de 2021-2022, testar modelos de série temporal dedicados (ex: Prophet) como baseline adicional, e incorporar features espaciais de vizinhança entre distritos.
+   - População por distrito é de 2020 (ano mais próximo disponível na série quinquenal SEADE), não exatamente 2021-2022 — aproximação razoável, mas não exata.
+   - Ausência de variáveis socioeconômicas adicionais (renda, infraestrutura urbana) que poderiam explicar mais variação entre distritos.
+6. **Próximos passos recomendados:** estender a série histórica além de 2021-2022, testar modelos de série temporal dedicados (ex: Prophet, ARIMA) como comparação adicional às árvores, incorporar features de autocorrelação espacial (efeito de transbordamento entre distritos vizinhos), e usar renda/densidade (SEADE) para explicar variação residual entre distritos.
 
 ---
 

@@ -52,7 +52,7 @@ def main():
     teste_mask = ~treino_mask
 
     # Limiares de risco calculados so no treino (evita vazamento da distribuicao futura)
-    classe, (q1, q2) = definir_classe_risco(df.loc[treino_mask, "TOTAL_OCORRENCIAS"], df["TOTAL_OCORRENCIAS"])
+    classe, (q1, q2) = definir_classe_risco(df.loc[treino_mask, "TAXA_100K"], df["TAXA_100K"])
     df["CLASSE_RISCO"] = classe
     print(f"Limiares de risco (definidos so com dados de treino): Q1={q1:.1f} | Q2={q2:.1f}")
     print(df["CLASSE_RISCO"].value_counts())
@@ -146,7 +146,7 @@ def main():
     importancias.to_csv("reports/feature_importance.csv")
 
     # Predicoes finais para o mapa (distrito, ano_mes, real, previsto)
-    saida = df.loc[teste_mask, ["DISTRITO", "SUBPREFEITURA", "ANO_MES", "TOTAL_OCORRENCIAS", "CLASSE_RISCO"]].copy()
+    saida = df.loc[teste_mask, ["DISTRITO", "SUBPREFEITURA", "ANO_MES", "TAXA_100K", "CLASSE_RISCO"]].copy()
     saida["CLASSE_PREVISTA"] = le_target.inverse_transform(pred_final)
     saida.to_parquet("data/processed/predicoes_teste.parquet", index=False)
     print("\nPredicoes de teste salvas em data/processed/predicoes_teste.parquet")

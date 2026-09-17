@@ -28,6 +28,18 @@ def main():
     # Agregacao base: total de ocorrencias por distrito x mes
     agg = df.groupby(["DISTRITO", "SUBPREFEITURA", "ANO", "MES", "ANO_MES"]).size().reset_index(name="TOTAL_OCORRENCIAS")
 
+    # Normalizacao por populacao (taxa por 100 mil habitantes) -- SEADE, Censo 2022, ano-base 2020
+    import unicodedata
+    def normaliza(s):
+        s = str(s).upper().strip()
+        return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
+
+    pop = pd.read_csv("data/external/populacao_distrito_2020.csv")
+    agg["DISTRITO_NORM"] = agg["DISTRITO"].apply(normaliza)
+    agg = agg.merge(pop, on="DISTRITO_NORM", how="left")
+    agg["TAXA_100K"] = (agg["TOTAL_OCORRENCIAS"] / agg["POPULACAO_2020"]) * 100000
+    agg = agg.drop(columns=["DISTRITO_NORM"])
+
     # Proporcao por categoria (perfil do distrito naquele mes)
     cat = df.groupby(["DISTRITO", "ANO_MES", "CATEGORIA"]).size().unstack(fill_value=0)
     cat = cat.div(cat.sum(axis=1), axis=0).add_prefix("PCT_").reset_index()
@@ -35,8 +47,8 @@ def main():
 
     agg = agg.sort_values(["DISTRITO", "ANO_MES"]).reset_index(drop=True)
 
-    # Features de lag e media movel (por distrito, ordenado no tempo)
-    g = agg.groupby("DISTRITO")["TOTAL_OCORRENCIAS"]
+    # Features de lag e media movel (por distrito, ordenado no tempo) -- agora sobre a TAXA normalizada
+    g = agg.groupby("DISTRITO")["TAXA_100K"]
     agg["LAG_1"] = g.shift(1)
     agg["LAG_2"] = g.shift(2)
     agg["MEDIA_MOVEL_3"] = g.shift(1).rolling(3).mean().reset_index(level=0, drop=True)
